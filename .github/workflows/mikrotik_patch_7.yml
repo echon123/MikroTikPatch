@@ -32,7 +32,9 @@ jobs:
 
       - name: Install System and Python Dependencies
         run: |
-          echo "::group::安装密码学库"
+          echo "::group::安装底层工具链与密码学库"
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools
           python -m pip install --upgrade pip
           pip install cryptography ed25519
           echo "::endgroup::"
@@ -49,19 +51,32 @@ jobs:
               exit 1
           fi
 
-      - name: Unpack NPK Firmware
+      - name: Extract and Unpack NPK Firmware (Universal Method)
         run: |
-          echo "INFO: 正在赋予仓库自带定制版解包工具执行权限..."
-          # 通常该工具位于仓库的 squashfs_tools 目录下
-          if [ ! -f "squashfs_tools/unsquashfs" ]; then
-              echo "::error::[Missing Tool] 未在仓库中找到定制的 squashfs_tools/unsquashfs 二进制文件。"
-              exit 1
-          fi
-          chmod +x squashfs_tools/unsquashfs
+          echo "INFO: 使用 Python 动态剥离 NPK 专有头部，提取纯净 SquashFS 镜像..."
+          python3 -c "
+          import sys
+          try:
+              with open('official_routeros.npk', 'rb') as f:
+                  data = f.read()
+              # 寻找 SquashFS 的标准魔数 'hsqs' (小端序)
+              idx = data.find(b'hsqs')
+              if idx != -1:
+                  with open('raw_squashfs.img', 'wb') as f:
+                      f.write(data[idx:])
+                  print(f'INFO: 成功在内存偏移量 {idx} 处截取到底层文件系统。')
+              else:
+                  print('::error::[Extract Fatal] 未找到 SquashFS 魔数，固件格式异常。')
+                  sys.exit(1)
+          except Exception as e:
+              print(f'::error::[Python Exception] {e}')
+              sys.exit(1)
+          "
           
-          echo "INFO: 使用定制版工具跨过 NPK 头部签名解包固件..."
-          if ! ./squashfs_tools/unsquashfs -d squashfs-root official_routeros.npk; then
-              echo "::error::[Unpack Failed] 定制版 Squashfs 解包失败，请检查固件完整性。"
+          echo "INFO: 调用 Ubuntu 标准 unsquashfs 工具执行解包..."
+          # 因为我们已经切掉了 MikroTik 的私有头部，标准工具现在可以完美识别它了
+          if ! unsquashfs -d squashfs-root raw_squashfs.img; then
+              echo "::error::[Unpack Failed] 标准 Squashfs 解包失败。"
               exit 1
           fi
 
