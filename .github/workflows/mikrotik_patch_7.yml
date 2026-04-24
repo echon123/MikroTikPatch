@@ -82,7 +82,6 @@ jobs:
 
       - name: Inject Custom Public Key (Memory Overwrite)
         env:
-          # 从 GitHub Secrets 注入你的自定义公钥
           CUSTOM_LICENSE_PUBLIC_KEY: ${{ secrets.CUSTOM_LICENSE_PUBLIC_KEY }}
         run: |
           echo "INFO: 开始执行二进制级公钥替换..."
@@ -91,9 +90,9 @@ jobs:
               exit 1
           fi
           
-          # 执行仓库中的 patch.py 脚本对解压目录进行覆写
-          # 注意：如果你的仓库中替换脚本不叫 patch.py，请修改此处文件名
-          python3 patch.py squashfs-root/ "$CUSTOM_LICENSE_PUBLIC_KEY"
+          # 【核心修复】：显式指定 'npk' 子命令。
+          # 绝大多数复刻脚本会直接从环境变量中读取 CUSTOM_LICENSE_PUBLIC_KEY，不需要在命令行尾部再传一遍参数。
+          python3 patch.py npk squashfs-root/
 
       - name: Repack and Sign with Custom Private Key
         env:
