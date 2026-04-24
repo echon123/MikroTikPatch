@@ -32,11 +32,7 @@ jobs:
 
       - name: Install System and Python Dependencies
         run: |
-          echo "::group::安装底层工具链与密码学库"
-          sudo apt-get update
-          # 安装用于解包 NPK 的 squashfs-tools
-          sudo apt-get install -y squashfs-tools
-          # 安装 Python 密码学依赖库
+          echo "::group::安装密码学库"
           python -m pip install --upgrade pip
           pip install cryptography ed25519
           echo "::endgroup::"
@@ -55,9 +51,17 @@ jobs:
 
       - name: Unpack NPK Firmware
         run: |
-          echo "INFO: 正在解包官方固件..."
-          if ! unsquashfs -d squashfs-root official_routeros.npk; then
-              echo "::error::[Unpack Failed] Squashfs 解包失败。"
+          echo "INFO: 正在赋予仓库自带定制版解包工具执行权限..."
+          # 通常该工具位于仓库的 squashfs_tools 目录下
+          if [ ! -f "squashfs_tools/unsquashfs" ]; then
+              echo "::error::[Missing Tool] 未在仓库中找到定制的 squashfs_tools/unsquashfs 二进制文件。"
+              exit 1
+          fi
+          chmod +x squashfs_tools/unsquashfs
+          
+          echo "INFO: 使用定制版工具跨过 NPK 头部签名解包固件..."
+          if ! ./squashfs_tools/unsquashfs -d squashfs-root official_routeros.npk; then
+              echo "::error::[Unpack Failed] 定制版 Squashfs 解包失败，请检查固件完整性。"
               exit 1
           fi
 
